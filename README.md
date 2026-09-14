@@ -4,6 +4,10 @@ wethinkVOTE is a secure, transparent blockchain-based voting system designed for
 
 > **Note:** This is a bootcamp/portfolio project. It is not affiliated with or endorsed by the IEC and is not intended for use in real elections.
 
+## Verification code
+
+WTC-CVACA9TT
+
 ## Features
 
 - **Secure Authentication**: Wallet-based authentication with student id
