@@ -1,8 +1,8 @@
-# WethinkVOTE - Blockchain Voting System for South African Elections
+# WethinkVOTE - Blockchain Voting System for South African universities
 
-wethinkVOTE is a secure, transparent blockchain-based voting system designed for South African elections, modelled loosely on the processes run by the Independent Electoral Commission (IEC) for national, provincial, and municipal voting. The system leverages Ethereum blockchain technology to ensure tamper-proof voting, real-time results, and complete auditability. This is based of university voting systems.
+wethinkVOTE is a secure, transparent blockchain-based voting system designed for university elections, modelled loosely on the processes run by the Independent Electoral Commission (IEC) for national, provincial, and municipal voting. The system leverages Ethereum blockchain technology to ensure tamper-proof voting, real-time results, and complete auditability. This is based of university voting systems.
 
-> **Note:** This is a bootcamp/portfolio project. It is not affiliated with or endorsed by the IEC and is not intended for use in real elections.
+
 
 ## Verification code
 

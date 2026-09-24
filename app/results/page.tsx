@@ -75,14 +75,14 @@ export default function ResultsPage() {
             </div>
             <h1 className="text-3xl font-bold">Election Results</h1>
           </div>
-          <p className="text-muted-foreground">Live results for the Presidential Election 2025</p>
+          <p className="text-muted-foreground">Live results for the Presidential Election 2026</p>
         </div>
 
         <Card className="w-full">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>wethinkvote Election 2025</CardTitle>
+                <CardTitle>wethinkvote Election 2026</CardTitle>
                 <CardDescription className="flex items-center mt-1">
                   <Clock className="h-3.5 w-3.5 mr-1" />
                   Last updated: {lastUpdated.toLocaleTimeString()}
