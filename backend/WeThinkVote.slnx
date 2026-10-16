@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="WeThinkVote.Api/WeThinkVote.Api.csproj" />
+  <Project Path="WeThinkVote.Core/WeThinkVote.Core.csproj" />
+  <Project Path="WeThinkVote.Infrastructure/WeThinkVote.Infrastructure.csproj" />
+</Solution>

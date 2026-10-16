@@ -37,14 +37,17 @@ import {
 export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("dashboard")
-  const [adminData, setAdminData] = useState({
+  const [adminData, setAdminData] = useState<any>({
     totalVoters: 0,
     registeredVoters: 0,
     votesCount: 0,
     electionStatus: "Not Started",
+    electionTitle: "",
     candidates: [],
     voters: [],
+    recentActivity: [],
   })
+  const [voterSearch, setVoterSearch] = useState("")
   const [newElection, setNewElection] = useState({
     title: "",
     startDate: "",
@@ -71,6 +74,26 @@ export default function AdminPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleExportVoters = () => {
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      "Student ID,Wallet Address,Department,Registration Date,Has Voted\n" +
+      (adminData.voters || [])
+        .map(
+          (v: any) =>
+            `"${v.studentId}","${v.walletAddress}","${v.department}","${v.registrationDate}",${v.hasVoted ? "Yes" : "No"}`
+        )
+        .join("\n")
+
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", `wethinkvote_voters_${new Date().toISOString().split("T")[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const handleCreateElection = async (e: React.FormEvent) => {
@@ -268,45 +291,41 @@ export default function AdminPage() {
                 <div className="space-y-8">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <p className="text-sm font-medium">Presidential Election 2025</p>
-                      <p className="text-sm text-muted-foreground">April 20 - April 25, 2025</p>
+                      <p className="text-sm font-semibold">{adminData.electionTitle || "Active University Election"}</p>
+                      <p className="text-sm text-muted-foreground">Status: {adminData.electionStatus}</p>
                     </div>
-                    <Button variant="outline" size="sm">
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      View Results
-                    </Button>
+                    <Link href="/results">
+                      <Button variant="outline" size="sm">
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        View Results
+                      </Button>
+                    </Link>
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-medium mb-4">Recent Activity</h3>
+                    <h3 className="text-lg font-medium mb-4">Recent Blockchain Activity</h3>
                     <div className="space-y-4">
-                      <div className="flex items-start gap-4">
-                        <div className="rounded-full bg-primary/15 p-2 ring-1 ring-primary/25">
-                          <Users className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">5 new voters registered</p>
-                          <p className="text-xs text-muted-foreground">10 minutes ago</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-4">
-                        <div className="rounded-full bg-primary/15 p-2 ring-1 ring-primary/25">
-                          <CheckCircle2 className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">12 new votes cast</p>
-                          <p className="text-xs text-muted-foreground">25 minutes ago</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-4">
-                        <div className="rounded-full bg-primary/15 p-2 ring-1 ring-primary/25">
-                          <Plus className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">New candidate added</p>
-                          <p className="text-xs text-muted-foreground">1 hour ago</p>
-                        </div>
-                      </div>
+                      {adminData.recentActivity && adminData.recentActivity.length > 0 ? (
+                        adminData.recentActivity.map((act: any) => (
+                          <div key={act.id} className="flex items-start gap-4">
+                            <div className="rounded-full bg-primary/15 p-2 ring-1 ring-primary/25">
+                              {act.type === "VoteCast" ? (
+                                <CheckCircle2 className="h-4 w-4 text-primary" />
+                              ) : act.type === "VoterRegistered" ? (
+                                <Users className="h-4 w-4 text-primary" />
+                              ) : (
+                                <Plus className="h-4 w-4 text-primary" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{act.title}</p>
+                              <p className="text-xs text-muted-foreground">{act.timeAgo}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No recent activity logged yet.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -406,13 +425,18 @@ export default function AdminPage() {
               <CardContent>
                 <div className="flex justify-between items-center mb-6">
                   <div className="flex gap-2">
-                    <Input placeholder="Search voters..." className="w-64" />
-                    <Button variant="outline" size="sm">
+                    <Input
+                      placeholder="Search voters by ID, wallet or dept..."
+                      className="w-72"
+                      value={voterSearch}
+                      onChange={(e) => setVoterSearch(e.target.value)}
+                    />
+                    <Button variant="outline" size="sm" onClick={fetchAdminData}>
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Refresh
                     </Button>
                   </div>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={handleExportVoters}>
                     <Download className="h-4 w-4 mr-2" />
                     Export List
                   </Button>
@@ -429,21 +453,29 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {adminData.voters.map((voter: any) => (
-                      <TableRow key={voter.id}>
-                        <TableCell className="font-medium">{voter.studentId}</TableCell>
-                        <TableCell className="font-mono text-xs">{voter.walletAddress.substring(0, 10)}...</TableCell>
-                        <TableCell>{voter.department}</TableCell>
-                        <TableCell>{new Date(voter.registrationDate).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          {voter.hasVoted ? (
-                            <CheckCircle2 className="h-4 w-4 text-primary" />
-                          ) : (
-                            <div className="h-4 w-4 rounded-full border border-muted-foreground" />
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {(adminData.voters || [])
+                      .filter(
+                        (voter: any) =>
+                          !voterSearch ||
+                          voter.studentId?.toLowerCase().includes(voterSearch.toLowerCase()) ||
+                          voter.walletAddress?.toLowerCase().includes(voterSearch.toLowerCase()) ||
+                          voter.department?.toLowerCase().includes(voterSearch.toLowerCase())
+                      )
+                      .map((voter: any) => (
+                        <TableRow key={voter.id}>
+                          <TableCell className="font-medium">{voter.studentId}</TableCell>
+                          <TableCell className="font-mono text-xs">{voter.walletAddress.substring(0, 10)}...</TableCell>
+                          <TableCell>{voter.department}</TableCell>
+                          <TableCell>{new Date(voter.registrationDate).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            {voter.hasVoted ? (
+                              <CheckCircle2 className="h-4 w-4 text-primary" />
+                            ) : (
+                              <div className="h-4 w-4 rounded-full border border-muted-foreground" />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
               </CardContent>

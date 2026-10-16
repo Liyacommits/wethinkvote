@@ -26,3 +26,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# .NET and database
+bin/
+obj/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+appsettings.Development.json

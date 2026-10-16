@@ -5,11 +5,14 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "dev:backend": "dotnet run --project backend/WeThinkVote.Api/WeThinkVote.Api.csproj --launch-profile http",
+    "build:backend": "dotnet build backend/WeThinkVote.slnx",
     "lint": "eslint .",
     "start": "next start"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
+    "@microsoft/signalr": "^10.0.11",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
     "@radix-ui/react-aspect-ratio": "1.1.1",

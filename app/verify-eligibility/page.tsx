@@ -23,6 +23,9 @@ export default function VerifyEligibilityPage() {
     level: "",
   })
 
+  const [studentName, setStudentName] = useState("")
+  const [studentDept, setStudentDept] = useState("")
+
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -32,6 +35,8 @@ export default function VerifyEligibilityPage() {
       const result = await verifyStudentEligibility(formData)
 
       if (result.eligible) {
+        setStudentName(result.fullName || "")
+        setStudentDept(result.department || "")
         setVerified(true)
       } else {
         setError(result.message || "You are not eligible to vote. Please contact the election administrator.")
@@ -69,6 +74,11 @@ export default function VerifyEligibilityPage() {
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <CheckCircle2 className="h-16 w-16 text-primary mb-4" />
               <h3 className="text-xl font-bold">Verification Successful!</h3>
+              {studentName && (
+                <p className="font-semibold text-primary mt-1">
+                  Welcome, {studentName} ({studentDept})
+                </p>
+              )}
               <p className="text-muted-foreground mt-2 mb-6">
                 You are eligible to vote in the upcoming elections. Please proceed to register with your wallet.
               </p>

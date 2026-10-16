@@ -3,8 +3,11 @@
 import { ethers } from "ethers"
 import VotingSystemABI from "./VotingSystemABI"
 
+// Base API configuration
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+
 // Sepolia testnet configuration
-export const SEPOLIA_CHAIN_ID = "0xaa36a7" // 11155111
+export const SEPOLIA_CHAIN_ID = process.env.NEXT_PUBLIC_SEPOLIA_CHAIN_ID || "0xaa36a7" // 11155111
 export const SEPOLIA_NETWORK = {
   chainId: SEPOLIA_CHAIN_ID,
   chainName: "Sepolia Test Network",
@@ -14,184 +17,229 @@ export const SEPOLIA_NETWORK = {
 }
 export const BLOCK_EXPLORER_URL = "https://sepolia.etherscan.io"
 
-// Contract address would be set after deployment to Sepolia
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+export const CONTRACT_ADDRESS =
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 
-// Mock data for development
-const mockData = {
-  positions: [
-    {
-      id: "president",
-      title: "President",
-      candidates: [
-        { id: "1", name: "Liya", position: "President", party: "Progress Party", votes: 145, percentage: 42.5 },
-        { id: "2", name: "Nyakallo", position: "President", party: "Student Voice", votes: 120, percentage: 35.2 },
-        { id: "3", name: "Letlotlo", position: "President", party: "Independent", votes: 76, percentage: 22.3 },
-      ],
-      totalVotes: 341,
-    },
-  ],
-  voters: [
-    {
-      id: "1",
-      studentId: "ST12345",
-      walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
-      department: "Computer Science",
-      registrationDate: "2025-04-15",
-      hasVoted: true,
-    },
-    {
-      id: "2",
-      studentId: "ST12346",
-      walletAddress: "0x2345678901abcdef2345678901abcdef23456789",
-      department: "Engineering",
-      registrationDate: "2025-04-16",
-      hasVoted: true,
-    },
-    {
-      id: "3",
-      studentId: "ST12347",
-      walletAddress: "0x3456789012abcdef3456789012abcdef34567890",
-      department: "Business",
-      registrationDate: "2025-04-16",
-      hasVoted: false,
-    },
-    {
-      id: "4",
-      studentId: "ST12348",
-      walletAddress: "0x4567890123abcdef4567890123abcdef45678901",
-      department: "Arts",
-      registrationDate: "2025-04-17",
-      hasVoted: true,
-    },
-    {
-      id: "5",
-      studentId: "ST12349",
-      walletAddress: "0x5678901234abcdef5678901234abcdef56789012",
-      department: "Science",
-      registrationDate: "2025-04-18",
-      hasVoted: false,
-    },
-  ],
-  candidates: [
-    { id: "1", name: "Liya", position: "President", party: "Progress Party" },
-    { id: "2", name: "Nyakallo", position: "President", party: "Student Voice" },
-    { id: "3", name: "Letlotlo", position: "President", party: "Independent" },
-  ],
+// Helper to get connected wallet address
+export const getConnectedAccount = async (): Promise<string | null> => {
+  if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
+    return null
+  }
+  try {
+    const accounts = (await window.ethereum.request({ method: "eth_accounts" })) as string[]
+    return accounts && accounts.length > 0 ? accounts[0] : null
+  } catch {
+    return null
+  }
 }
 
 // Connect to wallet
 export const connectWallet = async () => {
   try {
-    // Check if MetaMask is installed
-    if (typeof window.ethereum === "undefined") {
+    if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
       throw new Error("MetaMask is not installed. Please install MetaMask to use this application.")
     }
 
-    // Request account access
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" })
-
-    // Ensure the wallet is connected to the Sepolia testnet
+    const accounts = (await window.ethereum.request({ method: "eth_requestAccounts" })) as string[]
     await switchToSepolia()
-
-    return accounts[0]
+    if (accounts && accounts.length > 0) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("connected_wallet", accounts[0])
+      }
+      return accounts[0]
+    }
+    throw new Error("No accounts found in wallet")
   } catch (error) {
     console.error("Error connecting to wallet:", error)
     throw error
   }
 }
 
-// Switch the connected wallet to the Sepolia testnet (adds it if missing)
+// Switch wallet to Sepolia testnet
 export const switchToSepolia = async () => {
+  if (typeof window === "undefined" || typeof window.ethereum === "undefined") return
+
   try {
     await window.ethereum.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: SEPOLIA_CHAIN_ID }],
     })
   } catch (switchError: any) {
-    // 4902 = chain not added to the wallet yet
     if (switchError?.code === 4902) {
       await window.ethereum.request({
         method: "wallet_addEthereumChain",
         params: [SEPOLIA_NETWORK],
       })
     } else {
-      console.error("Error switching to Sepolia:", switchError)
+      console.warn("Could not switch to Sepolia network automatically:", switchError)
     }
   }
 }
 
-// Get contract instance
-const getContract = async () => {
+// Get contract instance (Ethers v6 compatible)
+export const getContract = async () => {
+  if (typeof window === "undefined" || typeof window.ethereum === "undefined") {
+    throw new Error("Ethereum wallet is not available.")
+  }
+  const provider = new ethers.BrowserProvider(window.ethereum)
+  const signer = await provider.getSigner()
+  return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, signer)
+}
+
+// Verify student eligibility against .NET registrar database
+export const verifyStudentEligibility = async (studentData: {
+  studentId: string
+  matricNumber: string
+  department?: string
+  level?: string
+}) => {
   try {
-    const provider = new ethers.providers.Web3Provider(window.ethereum)
-    const signer = provider.getSigner()
-    return new ethers.Contract(CONTRACT_ADDRESS, VotingSystemABI, signer)
-  } catch (error) {
-    console.error("Error getting contract:", error)
-    throw error
+    const response = await fetch(`${API_BASE_URL}/api/eligibility/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(studentData),
+    })
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      return {
+        eligible: false,
+        message: err.message || "Failed to verify eligibility. Please verify your student ID and matriculation number.",
+      }
+    }
+
+    const data = await response.json()
+    if (typeof window !== "undefined" && data.eligible) {
+      sessionStorage.setItem("verified_student", JSON.stringify(data))
+    }
+    return data
+  } catch (error: any) {
+    console.error("Error verifying eligibility:", error)
+    return {
+      eligible: false,
+      message: "Could not connect to the university verification server. Please check your network or try again.",
+    }
   }
 }
 
-// Register voter
-export const registerVoter = async (studentData: any) => {
+// Register voter with student credentials & wallet
+export const registerVoter = async (studentData: {
+  studentId: string
+  department: string
+  year: string
+  walletAddress?: string
+}) => {
   try {
-    // In a real implementation, this would interact with the blockchain
-    console.log("Registering voter:", studentData)
+    let wallet = studentData.walletAddress
+    if (!wallet) {
+      wallet = (await getConnectedAccount()) || (typeof window !== "undefined" ? localStorage.getItem("connected_wallet") || "" : "")
+    }
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    if (!wallet) {
+      return { success: false, message: "Please connect your MetaMask wallet first." }
+    }
 
-    return { success: true }
-  } catch (error) {
+    const response = await fetch(`${API_BASE_URL}/api/voters/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        studentId: studentData.studentId,
+        department: studentData.department,
+        year: studentData.year,
+        walletAddress: wallet,
+      }),
+    })
+
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      return { success: false, message: result.message || "Registration failed. Please check your credentials." }
+    }
+
+    return { success: true, message: result.message || "Registration successful" }
+  } catch (error: any) {
     console.error("Error registering voter:", error)
-    throw error
+    return {
+      success: false,
+      message: "Could not connect to the backend API server. Please ensure the .NET backend is running on port 5000.",
+    }
   }
 }
 
-// Check voter status
-export const checkVoterStatus = async () => {
+// Check voter status from .NET API
+export const checkVoterStatus = async (walletAddress?: string) => {
   try {
-    // In a real implementation, this would check the blockchain
-    console.log("Checking voter status")
+    let address = walletAddress
+    if (!address) {
+      address = (await getConnectedAccount()) || (typeof window !== "undefined" ? localStorage.getItem("connected_wallet") || "" : "")
+    }
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    if (!address) {
+      return { isRegistered: false, hasVoted: false }
+    }
 
-    // For demo purposes, return false to allow voting
-    return { hasVoted: false }
+    const response = await fetch(`${API_BASE_URL}/api/voters/${encodeURIComponent(address)}/status`)
+    if (!response.ok) {
+      return { isRegistered: false, hasVoted: false }
+    }
+
+    const data = await response.json()
+    return {
+      isRegistered: !!data.isRegistered,
+      hasVoted: !!data.hasVoted,
+      studentId: data.studentId,
+      department: data.department,
+      walletAddress: data.walletAddress,
+    }
   } catch (error) {
     console.error("Error checking voter status:", error)
-    throw error
+    return { isRegistered: false, hasVoted: false }
   }
 }
 
-// Get election data
+// Get active election data and positions
 export const getElectionData = async () => {
   try {
-    // In a real implementation, this would fetch from the blockchain
-    console.log("Getting election data")
-
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    return { positions: mockData.positions }
+    const response = await fetch(`${API_BASE_URL}/api/elections/active`)
+    if (!response.ok) {
+      throw new Error("Failed to fetch election data from backend")
+    }
+    const data = await response.json()
+    return {
+      electionId: data.electionId,
+      title: data.title,
+      status: data.status,
+      positions: data.positions || [],
+    }
   } catch (error) {
     console.error("Error getting election data:", error)
     throw error
   }
 }
 
-// Cast vote
+// Cast vote via .NET blockchain relayer / record service
 export const castVote = async (selectedCandidates: Record<string, string>) => {
   try {
-    // In a real implementation, this would interact with the blockchain
-    console.log("Casting votes:", selectedCandidates)
+    const wallet = (await getConnectedAccount()) || (typeof window !== "undefined" ? localStorage.getItem("connected_wallet") || "" : "")
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    const response = await fetch(`${API_BASE_URL}/api/elections/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        selectedCandidates,
+        voterAddress: wallet,
+      }),
+    })
 
-    return { success: true, transactionHash: "0x7f9e4b5c3d2a1b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6" }
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(result.message || "Failed to submit ballot")
+    }
+
+    return {
+      success: true,
+      transactionHash: result.transactionHash,
+      message: result.message,
+    }
   } catch (error) {
     console.error("Error casting vote:", error)
     throw error
@@ -199,37 +247,50 @@ export const castVote = async (selectedCandidates: Record<string, string>) => {
 }
 
 // Get election results
-export const getElectionResults = async () => {
+export const getElectionResults = async (electionId?: string) => {
   try {
-    // In a real implementation, this would fetch from the blockchain
-    console.log("Getting election results")
+    const url = electionId
+      ? `${API_BASE_URL}/api/results?electionId=${encodeURIComponent(electionId)}`
+      : `${API_BASE_URL}/api/results`
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error("Failed to fetch results from backend")
+    }
 
-    return { positions: mockData.positions }
+    const data = await response.json()
+    return {
+      electionId: data.electionId,
+      electionTitle: data.electionTitle,
+      electionStatus: data.electionStatus,
+      totalVotes: data.totalVotes,
+      lastUpdated: data.lastUpdated,
+      positions: data.positions || [],
+    }
   } catch (error) {
     console.error("Error getting election results:", error)
     throw error
   }
 }
 
-// Get admin data
+// Get admin dashboard data
 export const getAdminData = async () => {
   try {
-    // In a real implementation, this would fetch from the blockchain
-    console.log("Getting admin data")
+    const response = await fetch(`${API_BASE_URL}/api/admin/dashboard`)
+    if (!response.ok) {
+      throw new Error("Failed to fetch admin data from backend")
+    }
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-
+    const data = await response.json()
     return {
-      totalVoters: 500,
-      registeredVoters: 341,
-      votesCount: 245,
-      electionStatus: "Active",
-      candidates: mockData.candidates,
-      voters: mockData.voters,
+      totalVoters: data.totalVoters ?? 0,
+      registeredVoters: data.registeredVoters ?? 0,
+      votesCount: data.votesCount ?? 0,
+      electionStatus: data.electionStatus ?? "Not Started",
+      electionTitle: data.electionTitle,
+      candidates: data.candidates || [],
+      voters: data.voters || [],
+      recentActivity: data.recentActivity || [],
     }
   } catch (error) {
     console.error("Error getting admin data:", error)
@@ -238,13 +299,24 @@ export const getAdminData = async () => {
 }
 
 // Create election
-export const createElection = async (electionData: any) => {
+export const createElection = async (electionData: {
+  title: string
+  startDate: string
+  endDate: string
+  requireVerification?: boolean
+  allowResults?: boolean
+}) => {
   try {
-    // In a real implementation, this would interact with the blockchain
-    console.log("Creating election:", electionData)
+    const response = await fetch(`${API_BASE_URL}/api/admin/elections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(electionData),
+    })
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || "Failed to create election")
+    }
 
     return { success: true }
   } catch (error) {
@@ -254,13 +326,24 @@ export const createElection = async (electionData: any) => {
 }
 
 // Add candidate
-export const addCandidate = async (candidateData: any) => {
+export const addCandidate = async (candidateData: {
+  name: string
+  position: string
+  party: string
+  category?: string
+  bio?: string
+}) => {
   try {
-    // In a real implementation, this would interact with the blockchain
-    console.log("Adding candidate:", candidateData)
+    const response = await fetch(`${API_BASE_URL}/api/admin/candidates`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(candidateData),
+    })
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || "Failed to add candidate")
+    }
 
     return { success: true }
   } catch (error) {
@@ -272,11 +355,13 @@ export const addCandidate = async (candidateData: any) => {
 // Remove candidate
 export const removeCandidate = async (candidateId: string) => {
   try {
-    // In a real implementation, this would interact with the blockchain
-    console.log("Removing candidate:", candidateId)
+    const response = await fetch(`${API_BASE_URL}/api/admin/candidates/${encodeURIComponent(candidateId)}`, {
+      method: "DELETE",
+    })
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    if (!response.ok) {
+      throw new Error("Failed to remove candidate")
+    }
 
     return { success: true }
   } catch (error) {
@@ -288,11 +373,13 @@ export const removeCandidate = async (candidateId: string) => {
 // Start election
 export const startElection = async () => {
   try {
-    // In a real implementation, this would interact with the blockchain
-    console.log("Starting election")
+    const response = await fetch(`${API_BASE_URL}/api/admin/elections/start`, {
+      method: "POST",
+    })
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 1200))
+    if (!response.ok) {
+      throw new Error("Failed to start election")
+    }
 
     return { success: true }
   } catch (error) {
@@ -304,11 +391,13 @@ export const startElection = async () => {
 // End election
 export const endElection = async () => {
   try {
-    // In a real implementation, this would interact with the blockchain
-    console.log("Ending election")
+    const response = await fetch(`${API_BASE_URL}/api/admin/elections/end`, {
+      method: "POST",
+    })
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 1200))
+    if (!response.ok) {
+      throw new Error("Failed to end election")
+    }
 
     return { success: true }
   } catch (error) {
@@ -317,66 +406,16 @@ export const endElection = async () => {
   }
 }
 
-// Verify student eligibility
-export const verifyStudentEligibility = async (studentData: any) => {
-  try {
-    // In a real implementation, this would check against a university database
-    console.log("Verifying student eligibility:", studentData)
-
-    // Simulate verification delay
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    // For demo purposes, we'll approve most students
-    // In production, this would check against actual university records
-    if (!studentData.studentId || !studentData.matricNumber) {
-      return {
-        eligible: false,
-        message: "Invalid student ID or matriculation number.",
-      }
-    }
-
-    return {
-      eligible: true,
-      studentId: studentData.studentId,
-      department: studentData.department,
-      level: studentData.level,
-    }
-  } catch (error) {
-    console.error("Error verifying eligibility:", error)
-    throw error
-  }
-}
-
 // Get voting categories
 export const getVotingCategories = async () => {
   try {
-    // In a real implementation, this would fetch from the blockchain
-    console.log("Getting voting categories")
+    const response = await fetch(`${API_BASE_URL}/api/admin/categories`)
+    if (!response.ok) {
+      throw new Error("Failed to fetch voting categories")
+    }
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    // Mock data for demonstration
-    return [
-      {
-        id: "sug",
-        name: "Student Union Government",
-        description: "Main student representative body",
-        positions: ["President", "Vice President", "Secretary", "Treasurer", "PRO"],
-      },
-      {
-        id: "faculty",
-        name: "Faculty Representatives",
-        description: "Representatives for each faculty",
-        positions: ["Faculty Rep", "Assistant Faculty Rep"],
-      },
-      {
-        id: "department",
-        name: "Departmental Executives",
-        description: "Leadership for individual departments",
-        positions: ["President", "Vice President", "Secretary", "Treasurer"],
-      },
-    ]
+    const data = await response.json()
+    return data || []
   } catch (error) {
     console.error("Error getting voting categories:", error)
     throw error
@@ -384,13 +423,21 @@ export const getVotingCategories = async () => {
 }
 
 // Add voting category
-export const addVotingCategory = async (categoryData: any) => {
+export const addVotingCategory = async (categoryData: {
+  name: string
+  description: string
+  positions: string[]
+}) => {
   try {
-    // In a real implementation, this would interact with the blockchain
-    console.log("Adding voting category:", categoryData)
+    const response = await fetch(`${API_BASE_URL}/api/admin/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(categoryData),
+    })
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 1200))
+    if (!response.ok) {
+      throw new Error("Failed to add category")
+    }
 
     return { success: true }
   } catch (error) {
@@ -402,11 +449,13 @@ export const addVotingCategory = async (categoryData: any) => {
 // Remove voting category
 export const removeVotingCategory = async (categoryId: string) => {
   try {
-    // In a real implementation, this would interact with the blockchain
-    console.log("Removing voting category:", categoryId)
+    const response = await fetch(`${API_BASE_URL}/api/admin/categories/${encodeURIComponent(categoryId)}`, {
+      method: "DELETE",
+    })
 
-    // Simulate blockchain delay
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    if (!response.ok) {
+      throw new Error("Failed to remove category")
+    }
 
     return { success: true }
   } catch (error) {

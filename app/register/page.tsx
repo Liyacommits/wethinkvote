@@ -1,21 +1,21 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Blocks, CheckCircle2, Loader2 } from "lucide-react"
-import { connectWallet } from "@/lib/blockchain"
+import { ArrowLeft, Blocks, CheckCircle2, Loader2, AlertCircle } from "lucide-react"
+import { connectWallet, registerVoter } from "@/lib/blockchain"
 
 export default function RegisterPage() {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
+  const [error, setError] = useState("")
   const [formData, setFormData] = useState({
     studentId: "",
     department: "",
@@ -23,14 +23,50 @@ export default function RegisterPage() {
     walletAddress: "",
   })
 
+  useEffect(() => {
+    // Auto-populate from verified student session if available
+    try {
+      const saved = sessionStorage.getItem("verified_student")
+      if (saved) {
+        const student = JSON.parse(saved)
+        setFormData((prev) => ({
+          ...prev,
+          studentId: student.studentId || prev.studentId,
+          department: student.department?.toLowerCase().includes("computer")
+            ? "computer-science"
+            : student.department?.toLowerCase().includes("eng")
+            ? "engineering"
+            : student.department?.toLowerCase().includes("bus")
+            ? "business"
+            : student.department?.toLowerCase().includes("art")
+            ? "arts"
+            : "science",
+          year: student.level?.includes("100")
+            ? "1"
+            : student.level?.includes("200")
+            ? "2"
+            : student.level?.includes("300")
+            ? "3"
+            : student.level?.includes("400")
+            ? "4"
+            : "5",
+        }))
+      }
+    } catch {
+      // Ignore sessionStorage parse errors
+    }
+  }, [])
+
   const handleConnect = async () => {
     setLoading(true)
+    setError("")
     try {
       const address = await connectWallet()
-      setFormData({ ...formData, walletAddress: address })
+      setFormData((prev) => ({ ...prev, walletAddress: address }))
       setStep(2)
-    } catch (error) {
-      console.error("Failed to connect wallet:", error)
+    } catch (err: any) {
+      console.error("Failed to connect wallet:", err)
+      setError(err.message || "Failed to connect to MetaMask wallet. Please check your extension.")
     } finally {
       setLoading(false)
     }
@@ -39,12 +75,20 @@ export default function RegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError("")
 
-    // Simulate registration process
-    setTimeout(() => {
-      setLoading(false)
+    try {
+      const res = await registerVoter(formData)
+      if (res && !res.success) {
+        setError(res.message || "Failed to register voter on the election ledger. Please try again.")
+        return
+      }
       setRegistered(true)
-    }, 2000)
+    } catch (err: any) {
+      setError(err.message || "Failed to register voter on the election ledger. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -68,12 +112,19 @@ export default function RegisterPage() {
           <CardDescription>Register to participate in wethinkvote elections</CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 flex items-center gap-2 p-3 text-sm text-red-500 bg-red-50 dark:bg-red-950/30 rounded-md border border-red-200 dark:border-red-900">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
           {registered ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <CheckCircle2 className="h-16 w-16 text-primary mb-4" />
               <h3 className="text-xl font-bold">Registration Successful!</h3>
               <p className="text-muted-foreground mt-2 mb-6">
-                You are now registered to vote in the upcoming elections.
+                Your wallet has been verified and registered on the blockchain ledger for the active election.
               </p>
               <Link href="/vote">
                 <Button>Go to Voting Page</Button>
@@ -109,7 +160,7 @@ export default function RegisterPage() {
                 <Label htmlFor="studentId">Student ID</Label>
                 <Input
                   id="studentId"
-                  placeholder="Enter your student ID"
+                  placeholder="e.g. ST12345"
                   value={formData.studentId}
                   onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
                   required
@@ -155,13 +206,13 @@ export default function RegisterPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="walletAddress">Wallet Address</Label>
-                <Input id="walletAddress" value={formData.walletAddress} readOnly className="bg-muted" />
+                <Input id="walletAddress" value={formData.walletAddress} readOnly className="bg-muted font-mono text-xs" />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Registering...
+                    Registering on Blockchain...
                   </>
                 ) : (
                   "Complete Registration"
